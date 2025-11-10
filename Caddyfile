@@ -12,21 +12,18 @@
         trusted_proxies static private_ranges # trust railway's proxy
     }
 }
-
 (lb_settings) {
     lb_policy round_robin
     lb_retries 100
     lb_try_duration 10s
     lb_try_interval 250ms
 }
-
 (passive_health_checks) {
     fail_duration 60s
     max_fails 300
     unhealthy_latency 5s
     unhealthy_request_count 200
 }
-
 # site block, listens on the $PORT environment variable, automatically assigned by railway
 :{$PORT} {
     # access logs
@@ -43,8 +40,8 @@
         X-Content-Type-Options "nosniff"
         X-XSS-Protection "1; mode=block"
         
-        # Content Security Policy
-        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none';"
+        # Content Security Policy (actualizado para Google Tag Manager, Crisp Chat y blob URLs)
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://client.crisp.chat https://www.google-analytics.com https://ssl.google-analytics.com https://settings.crisp.chat; style-src 'self' 'unsafe-inline' https://client.crisp.chat; img-src 'self' data: https: blob:; font-src 'self' data: https:; connect-src 'self' https: wss: blob:; frame-src 'self' https://client.crisp.chat; child-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
         
         # Referrer policy
         Referrer-Policy "strict-origin-when-cross-origin"
