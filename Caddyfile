@@ -34,32 +34,10 @@
         format json # set access log format to json mode
     }
     
-    # 🔒 HEADERS DE SEGURIDAD
-    header {
-        # Prevenir clickjacking
-        X-Frame-Options "DENY"
-        
-        # Prevenir XSS
-        X-Content-Type-Options "nosniff"
-        X-XSS-Protection "1; mode=block"
-        
-        # Content Security Policy (actualizado para Google Tag Manager, Crisp Chat y blob URLs)
-        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://client.crisp.chat https://www.google-analytics.com https://ssl.google-analytics.com https://settings.crisp.chat https://connect.facebook.net; style-src 'self' 'unsafe-inline' https://client.crisp.chat; img-src 'self' data: https: blob:; font-src 'self' data: https:; connect-src 'self' https: wss: blob: https://connect.facebook.net; frame-src 'self' https://client.crisp.chat https://www.googletagmanager.com; child-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
-        
-        # Referrer policy
-        Referrer-Policy "strict-origin-when-cross-origin"
-        
-        # Permissions policy
-        Permissions-Policy "geolocation=(), microphone=(), camera=()"
-        
-        # Ocultar que es Caddy
-        -Server
-    }
-    
     # 📦 COMPRESSION
     encode gzip zstd
     
-    # 🔧 ACTUATOR - Must come BEFORE /api/* (order matters!)
+    # 🔧 ACTUATOR
     handle /actuator* {
         reverse_proxy {
             dynamic a {
@@ -72,8 +50,6 @@
             import lb_settings
             import passive_health_checks
             header_up Host {upstream_hostport}
-            
-            # 🌐 PASAR IP REAL DE CLOUDFLARE AL BACKEND
             header_up X-Real-IP {http.request.header.CF-Connecting-IP}
             header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
         }
@@ -92,15 +68,20 @@
             import lb_settings
             import passive_health_checks
             header_up Host {upstream_hostport}
-            
-            # 🌐 PASAR IP REAL DE CLOUDFLARE AL BACKEND
             header_up X-Real-IP {http.request.header.CF-Connecting-IP}
             header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
         }
     }
     
-    # 🎨 FRONTEND - Catch-all al final
+    # 🎨 FRONTEND - Catch-all
     handle {
+        header {
+            X-Frame-Options "DENY"
+            X-Content-Type-Options "nosniff"
+            Referrer-Policy "strict-origin-when-cross-origin"
+            -Server
+        }
+        
         reverse_proxy {
             dynamic a {
                 name {$FRONTEND_DOMAIN:frontend.railway.internal}
@@ -112,8 +93,6 @@
             import lb_settings
             import passive_health_checks
             header_up Host {upstream_hostport}
-            
-            # 🌐 PASAR IP REAL DE CLOUDFLARE AL FRONTEND
             header_up X-Real-IP {http.request.header.CF-Connecting-IP}
             header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
         }
