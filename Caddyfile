@@ -39,10 +39,10 @@
 }
 
 (passive_health_checks) {
-	fail_duration 30s
-	max_fails 5
-	unhealthy_latency 10s
-	unhealthy_request_count 10
+	fail_duration 10s
+	max_fails 300
+	unhealthy_latency 30s
+	unhealthy_request_count 300
 }
 
 (proxy_headers) {
