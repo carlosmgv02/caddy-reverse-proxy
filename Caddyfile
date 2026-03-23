@@ -17,7 +17,7 @@
 		port {$BACKEND_PORT:8080}
 		refresh 5s
 		dial_timeout 3s
-		versions ipv4
+		versions ipv4 ipv6
 	}
 }
 
@@ -27,7 +27,7 @@
 		port {$FRONTEND_PORT:3000}
 		refresh 5s
 		dial_timeout 3s
-		versions ipv4
+		versions ipv4 ipv6
 	}
 }
 
