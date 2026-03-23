@@ -1,110 +1,100 @@
 # global options
 {
-    admin off # theres no need for the admin api in railway's environment
-    persist_config off # storage isn't persistent anyway
-    auto_https off # railway handles https for us, this could in some cases cause issues if left enabled
-    # runtime logs
-    log {
-        format json # set runtime log format to json mode
-    }
-    # server options
-    servers {
-        trusted_proxies static private_ranges # trust railway's proxy
-    }
+	admin off
+	persist_config off
+	auto_https off
+	log {
+		format json
+	}
+	servers {
+		trusted_proxies static private_ranges
+	}
 }
+
+(backend_upstream) {
+	dynamic a {
+		name {$BACKEND_DOMAIN:backend.railway.internal}
+		port {$BACKEND_PORT:8080}
+		refresh 5s
+		dial_timeout 3s
+		versions ipv4 ipv6
+	}
+}
+
+(frontend_upstream) {
+	dynamic a {
+		name {$FRONTEND_DOMAIN:frontend.railway.internal}
+		port {$FRONTEND_PORT:3000}
+		refresh 5s
+		dial_timeout 3s
+		versions ipv4 ipv6
+	}
+}
+
 (lb_settings) {
-    lb_policy round_robin
-    lb_retries 100
-    lb_try_duration 10s
-    lb_try_interval 250ms
+	lb_policy round_robin
+	lb_retries 5
+	lb_try_duration 5s
+	lb_try_interval 500ms
 }
+
 (passive_health_checks) {
-    fail_duration 60s
-    max_fails 300
-    unhealthy_latency 5s
-    unhealthy_request_count 200
+	fail_duration 10s
+	max_fails 300
+	unhealthy_latency 30s
+	unhealthy_request_count 300
 }
-# site block, listens on the $PORT environment variable, automatically assigned by railway
+
+(proxy_headers) {
+	header_up Host {upstream_hostport}
+	header_up X-Real-IP {http.request.header.CF-Connecting-IP}
+	header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+}
+
 :{$PORT} {
-    # access logs
-    log {
-        format json # set access log format to json mode
-    }
-    
-    # 🔒 HEADERS DE SEGURIDAD
-    header {
-        # Prevenir clickjacking
-        X-Frame-Options "DENY"
-        
-        # Prevenir XSS
-        X-Content-Type-Options "nosniff"
-        X-XSS-Protection "1; mode=block"
-        
-        # Content Security Policy (actualizado para Google Tag Manager, Crisp Chat, Loom y blob URLs)
-        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://client.crisp.chat https://www.google-analytics.com https://ssl.google-analytics.com https://settings.crisp.chat https://connect.facebook.net; style-src 'self' 'unsafe-inline' https://client.crisp.chat; img-src 'self' data: https: blob:; font-src 'self' data: https:; connect-src 'self' https: wss: blob: https://connect.facebook.net; frame-src 'self' https://client.crisp.chat https://www.googletagmanager.com https://www.loom.com https://challenges.cloudflare.com; child-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
-        
-        # Referrer policy
-        Referrer-Policy "strict-origin-when-cross-origin"
-        
-        # Permissions policy
-        Permissions-Policy "geolocation=(), microphone=(), camera=()"
-        
-        # Ocultar que es Caddy
-        -Server
-    }
-    
-    # 📦 COMPRESSION
-    encode gzip zstd
-    
-    # proxy all requests for /api/* to the backend FIRST (order matters!)
-    # using handle instead of handle_path to preserve the /api prefix
-    handle {$BACKEND_PATH:/api}/* {
-        # proxy all requests for /api/* to the backend, configure this variable in the service settings
-        reverse_proxy {
-            # for private networking replicas are exposed as multiple dns results, use those dns results as the upstreams
-            dynamic a {
-                name {$BACKEND_DOMAIN}
-                port {$BACKEND_PORT}
-                refresh 1s
-                dial_timeout 30s
-                versions ipv4 ipv6
-            }
-            # configure load balancing settings
-            import lb_settings
-            # configure passive health checks
-            import passive_health_checks
-            # sets the Host header to the header to the dynamic name and port options
-            header_up Host {upstream_hostport}
-            
-            # 🌐 PASAR IP REAL DE CLOUDFLARE AL BACKEND
-            header_up X-Real-IP {http.request.header.CF-Connecting-IP}
-            header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
-            header_up X-Forwarded-Proto {http.request.scheme}
-        }
-    }
-    
-    # proxy all other requests to the frontend
-    handle {
-        reverse_proxy {
-            # for private networking replicas are exposed as multiple dns results, use those dns results as the upstreams
-            dynamic a {
-                name {$FRONTEND_DOMAIN}
-                port {$FRONTEND_PORT}
-                refresh 1s
-                dial_timeout 30s
-                versions ipv4 ipv6
-            }
-            # configure load balancing settings
-            import lb_settings
-            # configure passive health checks
-            import passive_health_checks
-            # sets the Host header to the header to the dynamic name and port options
-            header_up Host {upstream_hostport}
-            
-            # 🌐 PASAR IP REAL DE CLOUDFLARE AL FRONTEND
-            header_up X-Real-IP {http.request.header.CF-Connecting-IP}
-            header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
-            header_up X-Forwarded-Proto {http.request.scheme}
-        }
-    }
+	log {
+		format json
+	}
+
+	encode gzip zstd
+
+	# ACTUATOR
+	handle /actuator* {
+		reverse_proxy {
+			import backend_upstream
+			import lb_settings
+			import passive_health_checks
+			import proxy_headers
+		}
+	}
+
+	# BACKEND API
+	handle /api/* {
+		reverse_proxy {
+			import backend_upstream
+			import lb_settings
+			import passive_health_checks
+			import proxy_headers
+		}
+	}
+
+	# FRONTEND
+	handle {
+		header {
+			X-Frame-Options "SAMEORIGIN"
+			X-Content-Type-Options "nosniff"
+			X-XSS-Protection "1; mode=block"
+			Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://client.crisp.chat https://www.google-analytics.com https://ssl.google-analytics.com https://settings.crisp.chat https://connect.facebook.net https://challenges.cloudflare.com https://www.clarity.ms https://scripts.clarity.ms https://betterstack.net; style-src 'self' 'unsafe-inline' https://client.crisp.chat https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' data: https: https://fonts.gstatic.com; connect-src 'self' https: wss: blob: https://connect.facebook.net; frame-src 'self' https://client.crisp.chat https://www.googletagmanager.com https://www.loom.com https://challenges.cloudflare.com; child-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
+			Referrer-Policy "strict-origin-when-cross-origin"
+			Permissions-Policy "geolocation=(), microphone=(), camera=()"
+			-Server
+		}
+
+		reverse_proxy {
+			import frontend_upstream
+			import lb_settings
+			import passive_health_checks
+			import proxy_headers
+		}
+	}
 }
