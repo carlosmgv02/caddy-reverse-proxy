@@ -80,12 +80,22 @@
 
 	# FRONTEND
 	handle {
+		# La CSP, X-Frame-Options, X-Content-Type-Options y Referrer-Policy las
+		# pone ahora Cloudflare, en cloudflare/csp.tf de beel-infra (fase
+		# http_response_headers_transform). Ahí y en ningún otro sitio.
+		#
+		# El motivo es que la consola se sirve desde dos infraestructuras
+		# —app.beel.es por aquí, test.beel.es por un túnel a Dokploy— y este
+		# Caddy solo está delante de una. Mantener la política en cada origen
+		# la duplicaba en dos tecnologías distintas, y ya había divergido:
+		# test.beel.es no servía CSP ninguna.
+		#
+		# Lo que queda aquí es lo que el borde NO puede dar: `-Server` se
+		# aplica donde se genera la cabecera, y Permissions-Policy no está en
+		# la regla de Cloudflare. X-XSS-Protection sigue por no mezclar su
+		# retirada —está obsoleta— con este cambio.
 		header {
-			X-Frame-Options "SAMEORIGIN"
-			X-Content-Type-Options "nosniff"
 			X-XSS-Protection "1; mode=block"
-			Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://client.crisp.chat https://www.google-analytics.com https://ssl.google-analytics.com https://settings.crisp.chat https://connect.facebook.net https://challenges.cloudflare.com https://www.clarity.ms https://scripts.clarity.ms https://betterstack.net https://snap.licdn.com https://uptime.betterstack.com; style-src 'self' 'unsafe-inline' https://client.crisp.chat https://fonts.googleapis.com https://uptime.betterstack.com; img-src 'self' data: https: blob:; font-src 'self' data: https: https://fonts.gstatic.com; connect-src 'self' https: wss: blob: https://connect.facebook.net; frame-src 'self' https://client.crisp.chat https://www.googletagmanager.com https://www.loom.com https://challenges.cloudflare.com; child-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://*.beel.es http://127.0.0.1:* http://[::1]:*;"
-			Referrer-Policy "strict-origin-when-cross-origin"
 			Permissions-Policy "geolocation=(), microphone=(), camera=()"
 			-Server
 		}
